@@ -151,9 +151,8 @@ def omniquant(
         omni_parameters = torch.load(args.resume)
     else:
         omni_parameters = {}
-
     
-    
+    lr_schedule = lambda x : args.nt_lr * (1 + x * (10. / len(layers)))
     for i in range(len(layers)):
         logger.info(f"=== Start quantize layer {i} ===")
         layer = layers[i].to(dev)
@@ -231,12 +230,64 @@ def omniquant(
 
                 loss_mean = torch.stack(loss_list).mean()
                 norm_mean = torch.stack(norm_list).mean()
-                logger.info(f"layer {i} iter {epochs} loss:{loss_mean} norm:{norm_mean} max memory_allocated {torch.cuda.max_memory_allocated(lm._device) / 1024**2} ")
+                logger.info(f"OminiQuant || layer {i} iter {epochs} loss:{loss_mean} norm:{norm_mean} max memory_allocated {torch.cuda.max_memory_allocated(lm._device) / 1024**2} ")
             qlayer.clear_temp_variable()
             del optimizer
 
         # real smooth and quantization
         qlayer.smooth_and_quant_inplace()
+
+        if args.nt:
+            with torch.no_grad():
+                qlayer.float()      # required for AMP training
+            # create optimizer
+            
+            _lr = lr_schedule(i)
+            optimizer = torch.optim.AdamW(
+                [{"params":qlayer.nt_parameters(),"lr":_lr}],weight_decay=args.wd)
+            loss_scaler = utils.NativeScalerWithGradNormCount()
+
+            layer_params = qlayer.nt_parameters()
+            for p in layer_params:
+                p.requires_grad_()
+            
+            for epochs in range(args.nt_epochs):
+                loss_list = []
+                norm_list = []
+                for j in range(args.nsamples//args.batch_size):    
+                    index = j * args.batch_size
+                    # obtain output of quantization model
+                    with traincast():
+                        # qlayer.smooth_and_quant_temporary()
+                        quant_out = qlayer(quant_inps[index:index+args.batch_size,], attention_mask=attention_mask_batch,position_ids=position_ids)[0]
+                        
+                        # norm-tweaking channel wise mean-std loss
+                        tea_mean = torch.mean(fp_inps[index:index+args.batch_size,].view(-1, quant_out.shape[-1]), dim=0)
+                        tea_std = torch.sqrt(torch.var(fp_inps[index:index+args.batch_size,].view(-1, quant_out.shape[-1]), dim=0) + 1e-6)
+                        tmp_mean = torch.mean(quant_out.view(-1, quant_out.shape[-1]), dim=0)
+                        tmp_std = torch.sqrt(torch.var(quant_out.view(-1, quant_out.shape[-1]), dim=0) + 1e-6)
+                        loss = loss_func(tea_mean, tmp_mean)
+                        loss += loss_func(tea_std, tmp_std)
+                        
+                        # loss = loss_func(fp_inps[index:index+args.batch_size,], quant_out)
+                
+                        if args.aug_loss:
+                            loss += loss_func(fp_inps_2[index:index+args.batch_size,], quant_out)
+                    if not math.isfinite(loss.item()):
+                        logger.info("Loss is NAN, stopping training")
+                        pdb.set_trace()
+                        
+                    loss_list.append(loss.data)
+                    optimizer.zero_grad()
+                    norm = loss_scaler(loss, optimizer,parameters=qlayer.nt_parameters())
+                    norm_list.append(norm.data)
+
+                loss_mean = torch.stack(loss_list).mean()
+                norm_mean = torch.stack(norm_list).mean()
+                logger.info(f"Norm-Tweaking || layer {i} iter {epochs} loss:{loss_mean} norm:{norm_mean} max memory_allocated {torch.cuda.max_memory_allocated(lm._device) / 1024**2} ")
+            # qlayer.clear_temp_variable()
+            del optimizer
+
         if args.epochs>0:
             # update input of quantization model
             with torch.no_grad():

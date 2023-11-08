@@ -381,6 +381,7 @@ class Task(abc.ABC):
 
     # The name of the `Task` benchmark as denoted in the HuggingFace datasets Hub
     # or a path to a custom `datasets` loading script.
+    # DATASET_PATH: str = '/mnt/dolphinfs/hdd_pool/docker/user/hadoop-hdpmlpserving/LLMs/LLMs_data_harness'
     DATASET_PATH: str = None
 
     # The name of a subset within `DATASET_PATH`.
@@ -438,6 +439,26 @@ class Task(abc.ABC):
             - `datasets.DownloadMode.FORCE_REDOWNLOAD`
                 Fresh download and fresh dataset.
         """
+        # print("path: {}; name: {}; data_dir: {}; cache_dir: {}; download_mode: {}".format(self.DATASET_PATH, self.DATASET_NAME, data_dir, cache_dir, download_mode))
+        # data_base = "/mnt/dolphinfs/ssd_pool/docker/user/hadoop-automl/common/LM_data/data/NLP/LLMs_data_harness/"
+        # if self.DATASET_NAME is not None:
+        #     dataset_dir_ = os.path.join(data_base, self.DATASET_PATH, self.DATASET_NAME)
+        # else:
+        #     dataset_dir_ = os.path.join(data_base, self.DATASET_PATH)
+        # # dataset_dir_ = os.path.join(data_base, self.DATASET_PATH, self.DATASET_NAME)
+        # print("dataset dir: {}".format(dataset_dir_))
+        # if os.path.exists(dataset_dir_):
+        #     print("read dataset from disk!")
+        #     self.dataset = datasets.load_from_disk(dataset_dir_)
+        # else:
+        #     self.dataset = datasets.load_dataset(
+        #         path=self.DATASET_PATH,
+        #         name=self.DATASET_NAME,
+        #         data_dir=data_dir,
+        #         cache_dir=cache_dir,
+        #         download_mode=download_mode,
+        #     )
+        # print("path: {}; name: {}; dataset size: {}".format(self.DATASET_PATH, self.DATASET_NAME, self.dataset))
         self.dataset = datasets.load_dataset(
             path=self.DATASET_PATH,
             name=self.DATASET_NAME,

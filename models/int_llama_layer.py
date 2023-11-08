@@ -207,8 +207,8 @@ class QuantLlamaDecoderLayer(nn.Module):
             hidden_act=config.hidden_act,
             args=args,
         )
-        self.input_layernorm = OmniLlamaRMSNorm(ori_layer.input_layernorm,eps=ori_layer.input_layernorm.variance_epsilon)
-        self.post_attention_layernorm = OmniLlamaRMSNorm(ori_layer.post_attention_layernorm,eps=ori_layer.post_attention_layernorm.variance_epsilon)
+        self.input_layernorm = OmniLlamaRMSNorm(ori_layer.input_layernorm,eps=ori_layer.input_layernorm.variance_epsilon,norm_update=args.nt)
+        self.post_attention_layernorm = OmniLlamaRMSNorm(ori_layer.post_attention_layernorm,eps=ori_layer.post_attention_layernorm.variance_epsilon,norm_update=args.nt)
 
     def forward(
         self,
@@ -343,6 +343,13 @@ class QuantLlamaDecoderLayer(nn.Module):
         params = []
         for n, m in self.named_parameters():
             if n.find('bound_factor') > -1:
+                params.append(m)
+        return iter(params)  
+    
+    def nt_parameters(self):
+        params = []
+        for n, m in self.named_parameters():
+            if n.find('layernorm') > -1:
                 params.append(m)
         return iter(params)  
 

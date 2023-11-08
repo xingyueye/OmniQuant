@@ -38,12 +38,15 @@ class OmniLayerNorm(nn.Module):
 
 
 class OmniLlamaRMSNorm(nn.Module):
-    def __init__(self, ori_norm, eps=1e-6):
+    def __init__(self, ori_norm, eps=1e-6, norm_update=False):
         """
         LlamaRMSNorm is equivalent to T5LayerNorm
         """
         super().__init__()
-        self.register_buffer('weight',ori_norm.weight)
+        if not norm_update:
+            self.register_buffer('weight',ori_norm.weight)
+        else:
+            self.weight =nn.Parameter(ori_norm.weight.data, requires_grad=False)
         self.bias = None
         self.variance_epsilon = eps
         self.use_temporary_parameter = False

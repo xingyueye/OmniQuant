@@ -95,7 +95,8 @@ def evaluate(lm, args, logger):
 
 
     if args.eval_ppl:
-        for dataset in ["wikitext2", "ptb", "c4","ptb-new",'c4-new']:
+        # for dataset in ["wikitext2", "ptb", "c4","ptb-new",'c4-new']:
+        for dataset in ["wikitext2", "ptb", "c4"]:
             cache_testloader = f'{args.cache_dir}/testloader_{args.model_family}_{dataset}_all.cache'
             if os.path.exists(cache_testloader):
                 testloader = torch.load(cache_testloader)
@@ -213,8 +214,11 @@ def main():
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--let_lr", type=float, default=5e-3)
     parser.add_argument("--lwc_lr", type=float, default=1e-2)
+    parser.add_argument("--nt_lr", type=float, default=1e-5)
     parser.add_argument("--wd", type=float, default=0)
     parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--nt_epochs", type=int, default=1)
+    parser.add_argument("--nt",default=False, action="store_true",help="layernorm learnable")
     parser.add_argument("--let",default=False, action="store_true",help="activate learnable equivalent transformation")
     parser.add_argument("--lwc",default=False, action="store_true",help="activate learnable weight clipping")
     parser.add_argument("--aug_loss", default=False, action="store_true", help="calculate additional loss with same input")
@@ -262,8 +266,6 @@ def main():
     lm.model.eval()
     for param in lm.model.parameters():
         param.requires_grad = False
-
-    
 
     args.weight_quant_params = {
         "n_bits": args.wbits,
